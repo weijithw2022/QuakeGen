@@ -28,6 +28,13 @@ class PhaseShuffle(nn.Module):
 
         return shuffled_x
 
+class Reshape(nn.Module):
+    def __init__(self, *shape):
+        super(Reshape, self).__init__()
+        self.shape = shape
+
+    def forward(self, x):
+        return x.view(x.size(0), *self.shape)  # Reshape keeping batch size
 class Encoder(nn.Module):
     # WaveGAN Discriminator 
     def __init__(self, input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, phase_shuffle, latent_dim,  num_gpus=1, num_extra_layers=0, add_final_conv=True):
@@ -39,26 +46,50 @@ class Encoder(nn.Module):
             nn.LeakyReLU(alpha, inplace=True),
             PhaseShuffle(phase_shuffle),
 
-            nn.Conv1d(base_channels, base_channels * 2, kernel_size, stride, padding, bias=False),
+            nn.Conv1d(base_channels, 2 * base_channels, kernel_size, stride, padding, bias=False),
             nn.LeakyReLU(alpha, inplace=True),
             PhaseShuffle(phase_shuffle),
             
-            nn.Conv1d(base_channels * 2, base_channels * 4, kernel_size, stride, padding, bias=False),
+            nn.Conv1d(2 * base_channels, 4 * base_channels, kernel_size, stride, padding, bias=False),
             nn.LeakyReLU(alpha, inplace=True),
             PhaseShuffle(phase_shuffle),
 
-            nn.Conv1d(base_channels * 4, base_channels * 16, kernel_size, stride, padding, bias=False),
+            nn.Conv1d(4 * base_channels, 8 * base_channels, kernel_size, stride, padding, bias=False),
             nn.LeakyReLU(alpha, inplace=True), 
-            PhaseShuffle(phase_shuffle),
-
-            nn.Conv1d(base_channels * 16, latent_dim, kernel_size, stride, padding, bias=False),
-            nn.LeakyReLU(alpha, inplace=True),
-
-            nn.Flatten(),
-            nn.Linear(base_channels * 16 * 16, 1)
+        
+            nn.Flatten(), #Reshape(256 * d),
+            nn.Linear(8 * base_channels * 12 , 1)
         )
 
         def forward(self, x):
             return self.main(x)
 
 
+class Decoder(nn.Module):
+    # WaveGAN Generator
+    def __init__(self, latent_dim, base_channels, output_channels, kernel_size, stride, padding, phase_shuffle, num_gpus=1, num_extra_layers=0, add_final_conv=True):
+        super(Decoder, self).__init__()
+        self.ngpu = num_gpus
+        self.latent_dim = latent_dim
+        
+        self.main = nn.Sequential(
+            nn.Linear(latent_dim, 8 * base_channels * 12),
+            Reshape(8 * base_channels, 12),
+
+            nn.ReLU(True),
+            nn.ConvTranspose1d(8 * base_channels, 4 * base_channels, kernel_size, stride, padding=2, output_padding=0, bias=False),
+
+            nn.ReLU(True),
+            nn.ConvTranspose1d(4 * base_channels, 2 * base_channels, kernel_size, stride, padding=2, output_padding=1, bias=False),
+
+            nn.ReLU(True),
+            nn.ConvTranspose1d(2 * base_channels, base_channels, kernel_size, stride, padding=3,output_padding=1, bias=False),
+
+            nn.ReLU(True),
+            nn.ConvTranspose1d(base_channels, output_channels, kernel_size, stride, padding=2, output_padding=1, bias=False),
+
+            nn.Tanh()
+        )
+    
+    def forward(self, x):
+        return self.main(x)
