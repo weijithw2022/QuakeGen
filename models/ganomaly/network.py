@@ -4,7 +4,6 @@ import torch.nn.parallel
 import torch.nn.functional as F
 
 class PhaseShuffle(nn.Module):
-    # Phase shuffling module
     def __init__(self, shift_factor):
         super(PhaseShuffle, self).__init__()
         self.shift_factor = shift_factor
@@ -12,17 +11,19 @@ class PhaseShuffle(nn.Module):
     def forward(self, x):
         if self.shift_factor == 0:
             return x
+
         batch_size, channels, samples = x.size()
-        shift_values = torch.randint(-self.shift_factor, self.shift_factor + 1, (batch_size,), device=x.device)  
-        # Initialize output tensor
+        shift_values = torch.randint(-self.shift_factor, self.shift_factor + 1, (batch_size,), device=x.device)
         shuffled_x = torch.zeros_like(x)
 
         for i in range(batch_size):
             shift = shift_values[i].item()
             if shift > 0:
                 shuffled_x[i, :, shift:] = x[i, :, :-shift]  # Shift right
+                shuffled_x[i, :, :shift] = x[i, :, 0:shift]  # Pad left with edge values
             elif shift < 0:
                 shuffled_x[i, :, :shift] = x[i, :, -shift:]  # Shift left
+                shuffled_x[i, :, shift:] = x[i, :, -1].unsqueeze(-1).expand(channels, -shift)  # Fix padding
             else:
                 shuffled_x[i] = x[i]  # No shift
 
