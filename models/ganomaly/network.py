@@ -88,28 +88,34 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
         self.ngpu = num_gpus
         self.latent_dim = latent_dim
-        
-        self.main = nn.Sequential(
-            nn.Linear(latent_dim, 8 * base_channels * 12),
-            Reshape(8 * base_channels, 12),
 
-            nn.ReLU(True),
-            nn.ConvTranspose1d(8 * base_channels, 4 * base_channels, kernel_size, stride, padding=2, output_padding=0, bias=False),
+        self.relu = nn.ReLU(True)
+        self.tanh = nn.Tanh()
 
-            nn.ReLU(True),
-            nn.ConvTranspose1d(4 * base_channels, 2 * base_channels, kernel_size, stride, padding=2, output_padding=1, bias=False),
+        self.fc = nn.Linear(latent_dim, 8 * base_channels * 12)
+        self.batchnorm1 = nn.BatchNorm1d(8 * base_channels)
 
-            nn.ReLU(True),
-            nn.ConvTranspose1d(2 * base_channels, base_channels, kernel_size, stride, padding=3,output_padding=1, bias=False),
+        self.deconv1 = nn.ConvTranspose1d(8 * base_channels, 4 * base_channels, kernel_size, stride, padding=2, output_padding=0, bias=False)
+        self.batchnorm2 = nn.BatchNorm1d(4 * base_channels)
 
-            nn.ReLU(True),
-            nn.ConvTranspose1d(base_channels, output_channels, kernel_size, stride, padding=2, output_padding=1, bias=False),
+        self.deconv2 = nn.ConvTranspose1d(4 * base_channels, 2 * base_channels, kernel_size, stride, padding=2, output_padding=1, bias=False)
+        self.batchnorm3 = nn.BatchNorm1d(2 * base_channels)
 
-            nn.Tanh()
-        )
+        self.deconv3 = nn.ConvTranspose1d(2 * base_channels, base_channels, kernel_size, stride, padding=3, output_padding=1, bias=False)
+        self.batchnorm4 = nn.BatchNorm1d(base_channels)
+
+        self.deconv4 = nn.ConvTranspose1d(base_channels, output_channels, kernel_size, stride, padding=2, output_padding=1, bias=False)
+    
     
     def forward(self, x):
-        return self.main(x)
+        x = self.fc(x)
+        x = x.view(x.size(0), -1, 12)
+        x = self.relu(self.batchnorm1(x))
+        x = self.relu(self.batchnorm2(self.deconv1(x)))
+        x = self.relu(self.batchnorm3(self.deconv2(x)))
+        x = self.relu(self.batchnorm4(self.deconv3(x)))
+        x = self.tanh(self.deconv4(x))
+        return x
     
 class Discriminator(nn.Module):
     def __init__(self, input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor):
