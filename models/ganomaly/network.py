@@ -29,6 +29,14 @@ class PhaseShuffle(nn.Module):
 
         return shuffled_x
 
+def weights_init(m):
+    classname = m.__class__.__name__
+    if classname.find('Conv') != -1:
+        m.weight.data.normal_(0.0, 0.02)
+    elif classname.find('BatchNorm') != -1:
+        m.weight.data.normal_(1.0, 0.02)
+        m.bias.data.fill_(0)
+
 class Encoder(nn.Module):
     # WaveGAN Discriminator 
     def __init__(self, input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor, num_gpus=1, num_extra_layers=0, add_final_conv=True):
@@ -163,6 +171,8 @@ class WGanomaly(nn.Module):
         self.decoder = Decoder(latent_dim, base_channels, input_channels, kernel_size, stride, padding, num_gpus, num_extra_layers, add_final_conv)
         self.discriminator = Discriminator(input_size, input_channels, base_channels, kernel_size, stride, padding, alpha, latent_dim, shuffle_factor)
         self.generator = Generator(latent_dim, base_channels, input_channels, kernel_size, stride, padding, num_gpus, num_extra_layers, add_final_conv)
+        # self.generator.apply(weights_init)
+        # self.discriminator.apply(weights_init)
 
     def forward(self, x):
         # Encoder-Decoder Process
