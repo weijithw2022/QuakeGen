@@ -142,3 +142,55 @@ class Generator(nn.Module):
         generated_wave = self.decoder(dense_rep_input)
         dense_rep_output = self.encoder(generated_wave)
         return generated_wave, dense_rep_input, dense_rep_output
+
+class WGanomaly(nn.Module):
+    """
+    Encoder network for QuakeNet
+    Processes E-N-Z seismic data in a time-series format.
+    """
+    def __init__(self, input_size, input_channels, base_channels, kernel_size, stride, padding, alpha, latent_dim, shuffle_factor, wadv, wcon, wenc, num_gpus=1, num_extra_layers=0, add_final_conv=True):
+        super(WGanomaly, self).__init__()
+        self.ngpu = num_gpus
+        self.latent_dim = latent_dim
+        self.shuffle_factor = shuffle_factor
+        self.wadv = wadv
+        self.wcon = wcon
+        self.wenc = wenc
+        self.l2_loss = nn.MSELoss()
+        self.l1_loss = nn.L1Loss()
+
+        self.encoder = Encoder(input_size, input_channels, base_channels, kernel_size, stride, padding, alpha, latent_dim, shuffle_factor)
+        self.decoder = Decoder(latent_dim, base_channels, input_channels, kernel_size, stride, padding, num_gpus, num_extra_layers, add_final_conv)
+        self.discriminator = Discriminator(input_size, input_channels, base_channels, kernel_size, stride, padding, alpha, latent_dim, shuffle_factor)
+        self.generator = Generator(latent_dim, base_channels, input_channels, kernel_size, stride, padding, num_gpus, num_extra_layers, add_final_conv)
+
+    def forward(self, x):
+        # Encoder-Decoder Process
+        generated_wave, dense_rep_input, dense_rep_output = self.generator(x)
+        # Discriminator Process
+        features_real, classifier_real = self.discriminator(x)
+        # Generated Wave Discriminator Process
+        features_generated, classifier_generated = self.discriminator(generated_wave)
+        return {
+            'generated_wave': generated_wave,
+            'dense_rep_input': dense_rep_input,
+            'dense_rep_output': dense_rep_output,
+            'features_real': features_real,
+            'classifier_real': classifier_real,
+            'features_generated': features_generated,
+            'classifier_generated': classifier_generated
+        }
+
+    def compute_loss(self, x, outputs):
+        adv_loss = self.l2_loss(outputs["features_real"], outputs["features_generated"])
+        con_loss = self.l1_loss(x, outputs["generated_wave"])
+        enc_loss = self.l2_loss(outputs["dense_rep_input"], outputs["dense_rep_output"])
+
+        loss = self.wadv*adv_loss + self.wcon*con_loss + self.wenc*enc_loss
+
+        return{
+            'loss': loss,
+            'adv_loss': adv_loss,
+            'con_loss': con_loss,
+            'enc_loss': enc_loss
+        }

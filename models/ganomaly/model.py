@@ -1,10 +1,14 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+import torch.nn.parallel
+from network import Encoder, Decoder, Discriminator, Generator
 
-class QuakeNetEncoder(nn.Module):
-    """
-    Encoder network for QuakeNet
-    Processes E-N-Z seismic data in a time-series format.
-    """
+def l1_loss(input, target):
+    return torch.mean(torch.abs(input - target))
+
+def l2_loss(input, target):
+    return torch.mean(torch.pow((input-target), 2))
+
 
    
