@@ -29,42 +29,58 @@ class PhaseShuffle(nn.Module):
 
         return shuffled_x
 
-class Reshape(nn.Module):
-    def __init__(self, *shape):
-        super(Reshape, self).__init__()
-        self.shape = shape
-
-    def forward(self, x):
-        return x.view(x.size(0), *self.shape)  # Reshape keeping batch size
 class Encoder(nn.Module):
     # WaveGAN Discriminator 
-    def __init__(self, input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, phase_shuffle, latent_dim,  num_gpus=1, num_extra_layers=0, add_final_conv=True):
+    def __init__(self, input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor, num_gpus=1, num_extra_layers=0, add_final_conv=True):
         super(Encoder, self).__init__()
         self.ngpu = num_gpus
+        self.shuffle_factor = shuffle_factor
 
-        self.main = nn.Sequential(
-            nn.Conv1d(input_channels, base_channels, kernel_size, stride, padding, bias=False),
-            nn.LeakyReLU(alpha, inplace=True),
-            PhaseShuffle(phase_shuffle),
+        self.leaky_relu = nn.LeakyReLU(alpha, inplace=True)
+        self.conv1 = nn.Conv1d(input_channels, base_channels, kernel_size, stride, padding, bias=False)
 
-            nn.Conv1d(base_channels, 2 * base_channels, kernel_size, stride, padding, bias=False),
-            nn.LeakyReLU(alpha, inplace=True),
-            PhaseShuffle(phase_shuffle),
-            
-            nn.Conv1d(2 * base_channels, 4 * base_channels, kernel_size, stride, padding, bias=False),
-            nn.LeakyReLU(alpha, inplace=True),
-            PhaseShuffle(phase_shuffle),
+        self.conv2 = nn.Conv1d(base_channels, 2 * base_channels, kernel_size, stride, padding, bias=False)
+        self.batchnorm2 = nn.BatchNorm1d(2 *base_channels)
 
-            nn.Conv1d(4 * base_channels, 8 * base_channels, kernel_size, stride, padding, bias=False),
-            nn.LeakyReLU(alpha, inplace=True), 
+        self.conv3 = nn.Conv1d(2 * base_channels, 4 * base_channels, kernel_size, stride, padding, bias=False)
+        self.batchnorm3 = nn.BatchNorm1d(4 * base_channels)
+
+        self.conv4 = nn.Conv1d(4 * base_channels, 8 * base_channels, kernel_size, stride, padding, bias=False)
+        self.batchnorm4 = nn.BatchNorm1d(8 * base_channels)
+        #  input_size // (stride ** 4) * 8 * base_channels
+        self.fc = nn.Linear(8 * base_channels * 12, 1)
+    
+    def phaseshuffle(self, x, shuffle_factor):
+        if shuffle_factor == 0:
+            return x  # No phase shuffle applied
+
+        batch_size, channels, seq_len = x.shape
+        phase = torch.randint(-shuffle_factor, shuffle_factor + 1, (1,)).item()  # Random shift in range [-rad, rad]
+
+        # Compute left and right padding
+        pad_l = max(phase, 0)
+        pad_r = max(-phase, 0)
+
+        # Apply reflection padding
+        x_padded = F.pad(x, (pad_l, pad_r), mode='reflect')
+
+        # Slice the tensor to maintain original sequence length
+        x_shuffled = x_padded[:, :, pad_r: pad_r + seq_len]
         
-            nn.Flatten(), #Reshape(256 * d),
-            nn.Linear(8 * base_channels * 12 , 1)
-        )
-
-        def forward(self, x):
-            return self.main(x)
-
+        return x_shuffled
+    
+    def forward(self, x):
+        x = self.leaky_relu(self.conv1(x))
+        x = self.phaseshuffle(x, self.shuffle_factor)
+        x = self.leaky_relu(self.batchnorm2(self.conv2(x)))
+        x = self.phaseshuffle(x, self.shuffle_factor)
+        x = self.leaky_relu(self.batchnorm3(self.conv3(x)))
+        x = self.phaseshuffle(x, self.shuffle_factor)
+        x = self.leaky_relu(self.batchnorm4(self.conv4(x)))
+        x = x.view(x.size(0), -1)
+        # x = torch.reshape(x, (x.size(0), -1))
+        x = self.fc(x)
+        return x
 
 class Decoder(nn.Module):
     # WaveGAN Generator
