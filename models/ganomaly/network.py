@@ -84,7 +84,7 @@ class Encoder(nn.Module):
 
 class Decoder(nn.Module):
     # WaveGAN Generator
-    def __init__(self, latent_dim, base_channels, output_channels, kernel_size, stride, padding, phase_shuffle, num_gpus=1, num_extra_layers=0, add_final_conv=True):
+    def __init__(self, latent_dim, base_channels, output_channels, kernel_size, stride, padding, num_gpus=1, num_extra_layers=0, add_final_conv=True):
         super(Decoder, self).__init__()
         self.ngpu = num_gpus
         self.latent_dim = latent_dim
@@ -124,9 +124,21 @@ class Discriminator(nn.Module):
         # Only features(Extract all layers except the last one)
         self.features = nn.Sequential(*list(encoder.children())[:-1])
         # Classifier(Extract the last layer for classification)
-        self.classifier = nn.Sequential(list(self.encoder.children())[-1], nn.Sigmoid())
+        self.classifier = nn.Sequential(list(encoder.children())[-1], nn.Sigmoid())
     
     def forward(self, x):
         features = self.features(x)
         classifier = self.classifier(features.view(features.size(0), -1))
         return features, classifier
+
+class Generator(nn.Module):
+    def __init__(self, input_size, input_channels, output_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor):
+        super(Generator, self).__init__()
+        self.encoder = Encoder(input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor)
+        self.decoder = Decoder(latent_dim, base_channels, output_channels, kernel_size, stride, padding)
+        
+    def forward(self, x):
+        dense_rep_input = self.encoder(x)
+        generated_wave = self.decoder(dense_rep_input)
+        dense_rep_output = self.encoder(generated_wave)
+        return generated_wave, dense_rep_input, dense_rep_output
