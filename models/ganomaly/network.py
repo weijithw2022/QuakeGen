@@ -110,3 +110,17 @@ class Decoder(nn.Module):
     
     def forward(self, x):
         return self.main(x)
+    
+class Discriminator(nn.Module):
+    def __init__(self, input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor):
+        super(Discriminator, self).__init__()
+        encoder = Encoder(input_size, input_channels, base_channels, kernel_size,  stride, padding, alpha, latent_dim,  shuffle_factor)
+        # Only features(Extract all layers except the last one)
+        self.features = nn.Sequential(*list(encoder.children())[:-1])
+        # Classifier(Extract the last layer for classification)
+        self.classifier = nn.Sequential(list(self.encoder.children())[-1], nn.Sigmoid())
+    
+    def forward(self, x):
+        features = self.features(x)
+        classifier = self.classifier(features.view(features.size(0), -1))
+        return features, classifier
