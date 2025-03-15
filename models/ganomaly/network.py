@@ -56,7 +56,7 @@ class Encoder(nn.Module):
         self.conv4 = nn.Conv1d(4 * base_channels, 8 * base_channels, kernel_size, stride, padding, bias=False)
         self.batchnorm4 = nn.BatchNorm1d(8 * base_channels)
         #  input_size // (stride ** 4) * 8 * base_channels
-        self.fc = nn.Linear(8 * base_channels * 12, 1)
+        self.fc = nn.Linear(8 * base_channels * 12, latent_dim)
     
     def phaseshuffle(self, x, shuffle_factor):
         if shuffle_factor == 0:
@@ -77,17 +77,18 @@ class Encoder(nn.Module):
         
         return x_shuffled
     
-    def forward(self, x):
+    def forward(self, x): 
         x = self.leaky_relu(self.conv1(x))
-        x = self.phaseshuffle(x, self.shuffle_factor)
-        x = self.leaky_relu(self.batchnorm2(self.conv2(x)))
+        x = self.phaseshuffle(x, self.shuffle_factor)    
+        x = self.leaky_relu(self.batchnorm2(self.conv2(x))) 
         x = self.phaseshuffle(x, self.shuffle_factor)
         x = self.leaky_relu(self.batchnorm3(self.conv3(x)))
         x = self.phaseshuffle(x, self.shuffle_factor)
-        x = self.leaky_relu(self.batchnorm4(self.conv4(x)))
+        x = self.leaky_relu(self.batchnorm4(self.conv4(x)))   
         x = x.view(x.size(0), -1)
         # x = torch.reshape(x, (x.size(0), -1))
         x = self.fc(x)
+        print("After FC Shape: ", x.shape)
         return x
 
 class Decoder(nn.Module):
@@ -117,7 +118,7 @@ class Decoder(nn.Module):
     
     def forward(self, x):
         x = self.fc(x)
-        x = x.view(x.size(0), -1, 12)
+        x = x.view(x.size(0), -1, 12)   
         x = self.relu(self.batchnorm1(x))
         x = self.relu(self.batchnorm2(self.deconv1(x)))
         x = self.relu(self.batchnorm3(self.deconv2(x)))
