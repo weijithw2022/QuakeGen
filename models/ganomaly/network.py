@@ -197,6 +197,18 @@ class WGanomaly(nn.Module):
         con_loss = self.l1_loss(x, outputs["generated_wave"])
         enc_loss = self.l2_loss(outputs["dense_rep_input"], outputs["dense_rep_output"])
 
+        """  # Normalize weights dynamically
+            wadv = 1.0 / (adv_loss.detach() + 1e-8)
+            wcon = 1.0 / (con_loss.detach() + 1e-8)
+            wenc = 1.0 / (enc_loss.detach() + 1e-8)
+
+            # Scale to keep relative balance
+            sum_weights = wadv + wcon + wenc
+            wadv /= sum_weights
+            wcon /= sum_weights
+            wenc /= sum_weights
+        """
+
         loss = self.wadv*adv_loss + self.wcon*con_loss + self.wenc*enc_loss
 
         return{
