@@ -16,8 +16,12 @@ class STEADDataset(data.Dataset):
         self.ev_list = self.edf['trace_name'].tolist()
         self.no_list = self.ndf['trace_name'].tolist()
         self.splits = self.split_data()
-    
+        self.f = h5py.File(self.file, "r")
+
     def __len__(self):
+        return len(self.ev_list) + len(self.no_list)
+    
+    def len(self):
         return f"The total number of earthquake events is {len(self.ev_list)} and the total number of noise events is {len(self.no_list)}"
     
     def split_data(self):
@@ -33,16 +37,15 @@ class STEADDataset(data.Dataset):
         }
     
     def get_waveform(self, trace_name):
-        with h5py.File(self.file, "r") as f:
-            dataset = f.get(f"data/{trace_name}")
-            if dataset is None:
-                raise ValueError(f"Trace {trace_name} not found in HDF5 file.")
-            
-            data = np.array(dataset)
-            data = torch.tensor(data, dtype=torch.float32)
+        dataset = self.f.get(f"data/{trace_name}")
+        if dataset is None:
+            raise ValueError(f"Trace {trace_name} not found in HDF5 file.")
+        
+        data = np.array(dataset)
+        data = torch.tensor(data, dtype=torch.float32)
 
-            if self.transform:
-                data = self.transform(data)
+        if self.transform:
+            data = self.transform(data)
 
         return data
     
@@ -53,4 +56,11 @@ class STEADDataset(data.Dataset):
         test_waveforms = [self.get_waveform(trace) for trace in self.splits["eq_test"]]
         noise_waveforms = [self.get_waveform(trace) for trace in self.splits["noise_test"]]
         return test_waveforms + noise_waveforms
+    
+    def __getitem__(self, idx):
+        if idx < len(self.ev_list):
+            return self.get_waveform(self.ev_list[idx]), 1  # 1 for earthquake
+        else:
+            return self.get_waveform(self.no_list[idx - len(self.ev_list)]), 0  # 0 for noise
+
     

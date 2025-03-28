@@ -31,8 +31,8 @@ class Config:
         # Optional: e.g., torchvision.transforms.Compose([...])
         self.DATASET                = STEADDataset(file=self.DATASET_FILE, csv_file=self.CSV_FILE,transform=None) 
 
-        self.TEST_DATA              = self.DATASET.get_test_data()
-        self.TRAIN_DATA             = self.DATASET.get_train_data()
+        self.TEST_DATA              = None
+        self.TRAIN_DATA             = None
 
         # Calculated parameters
         self.SAMPLE_WINDOW_SIZE = self.BASE_SAMPLING_RATE * self.TRAINING_WINDOW
@@ -43,17 +43,17 @@ class Config:
 
 class WGanomalyConfig:
     def __init__(self):
-        self.input_size = 6000, 
-        self.input_channels =3, 
-        self.base_channels  =8, 
-        self.kernel_size = 7, 
-        self.stride = 4, 
-        self.padding = 3, 
-        self.alpha = 0.2, 
-        self.latent_dim = 100, 
-        self.shuffle_factor = 2, 
-        self.num_gpus=1, 
-        self.num_extra_layers=0, 
+        self.input_size = 6000
+        self.input_channels =3
+        self.base_channels  =8
+        self.kernel_size = 7
+        self.stride = 4
+        self.padding = 3
+        self.alpha = 0.2
+        self.latent_dim = 100
+        self.shuffle_factor = 2
+        self.num_gpus=1
+        self.num_extra_layers=0
         self.add_final_conv=True
 
 class NNCFG:
@@ -90,6 +90,7 @@ class NNCFG:
         parser.add_argument('--detection_threshold', type=float, help='Detection threshold of when one output neuron exist')
 
         args = parser.parse_args()
+        # args, _ = parser.parse_known_args()
 
         self.learning_rate   = args.learning_rate   if args.learning_rate is not None else self.learning_rate
         self.epoch_count     = args.epoch_count     if args.epoch_count is not None else self.epoch_count

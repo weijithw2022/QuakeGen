@@ -1,9 +1,10 @@
+import os
 import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader, TensorDataset
 from ganomaly.network import WGanomaly
-from config import Config, NNCFG, WGanomalyConfig
+from config import Config, NNCFG, WGanomalyConfig, MODEL_TYPE
 
 class TrainWGanomaly:
     def __init__(self, model, dataloader, config):
@@ -63,7 +64,7 @@ class TrainWGanomaly:
 
     def save_model(self, config):
         """Save the trained model."""
-        model_path = f"{config.MODEL_PATH}{self.model.model_id}.pt"
+        model_path = os.path.join(config.MODEL_PATH, f"{self.model.model_id}.pt")
         torch.save({
             'model_state_dict': self.model.state_dict(),
             'model_id': self.model.model_id,
@@ -82,8 +83,10 @@ def train(cfg):
     nncfg = NNCFG()
     wganomalyconfig = WGanomalyConfig()
     nncfg.argParser(cfg)
-
-    dataloader = DataLoader(cfg.TRAIN_DATA, batch_size=nncfg.batch_size, shuffle=True)
+    train_data = cfg.DATASET.get_train_data()
+    train_tensors = torch.stack(train_data)
+    dataset = TensorDataset(train_tensors)  
+    dataloader = DataLoader(dataset, batch_size=nncfg.batch_size, shuffle=True)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     if cfg.MODEL_TYPE == MODEL_TYPE.WGANOMALY:
