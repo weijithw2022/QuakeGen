@@ -4,11 +4,13 @@ import numpy as np
 import torch
 import h5py
 import torch.utils.data as data
+from obspy import UTCDateTime
 from sklearn.model_selection import train_test_split
 
 class STEADDataset(data.Dataset):
-    def __init__(self, file, csv_file, transform=None):
+    def __init__(self, file, csv_file, window_size, transform=None):
         self.file = file
+        self.window_size = window_size
         self.transform = transform
         self.df = pd.read_csv(csv_file)
         self.edf = self.df[(self.df.trace_category == "earthquake_local") & (self.df.source_distance_km <= 30) & (self.df.source_magnitude > 3)]
@@ -36,24 +38,67 @@ class STEADDataset(data.Dataset):
         "noise_dev": no_dev
         }
     
-    def get_waveform(self, trace_name):
+    def extract_wave_window(data, wave_index, window_size):
+        half_window = window_size // 2 
+        start_index = max(0, wave_index - half_window)
+        end_wave = wave_index + half_window    
+        end_index = min(end_wave, data.shape[1])
+        return data[:, start_index:end_index]
+    
+    def get_eq_waveform(self, trace_name):
         dataset = self.f.get(f"data/{trace_name}")
         if dataset is None:
             raise ValueError(f"Trace {trace_name} not found in HDF5 file.")
         
         data = np.array(dataset)
+
+        p_arrival_index = int(dataset.attrs.get("p_arrival_sample", -1))
+        s_arrival_index = int(dataset.attrs.get("s_arrival_sample", -1))
+
+        window_size = self.window_size
+        s_p_diff = s_arrival_index - p_arrival_index
+
+        if s_p_diff < window_size:
+            return None
+        
+        p_data = self.extract_wave_window(data, p_arrival_index, window_size)
+        s_data = self.extract_wave_window(data, s_arrival_index, window_size)
+
+        data = np.stack([p_data, s_data], axis=0)
+        # data[0] = p_data, data[1] = s_data
         data = torch.tensor(data, dtype=torch.float32)
+        # p_wave = torch.tensor(p_wave, dtype=torch.float32) if p_wave is not None else None
+        # s_wave = torch.tensor(s_wave, dtype=torch.float32) if s_wave is not None else None
 
         if self.transform:
             data = self.transform(data)
 
         return data
     
+    def get_noise_data(self, trace_name):
+        dataset = self.f.get(f"data/{trace_name}")
+        if dataset is None:
+            raise ValueError(f"Trace {trace_name} not found in HDF5 file.")
+        
+        data = np.array(dataset)
+
+        total_samples = data.shape[1]
+        if total_samples < self.window_size:
+            return None
+        
+        num_windows = total_samples // self.window_size
+        sliced_data = [data[:, i * self.window_size:(i + 1) * self.window_size] for i in range(num_windows)]
+
+        data = torch.tensor(sliced_data, dtype=torch.float32)
+
+        return data
+
+    
     def get_train_data(self):
-        return [self.get_waveform(trace) for trace in self.splits["eq_train"]]
+        return [self.get_eq_waveform(trace) for trace in self.splits["eq_train"]]
     
     def get_test_data(self):
-        test_waveforms = [self.get_waveform(trace) for trace in self.splits["eq_test"]]
+        test_waveforms = [self.get_eq_waveform(trace) for trace in self.splits["eq_test"]]
         noise_waveforms = [self.get_waveform(trace) for trace in self.splits["noise_test"]]
         return test_waveforms + noise_waveforms
     
