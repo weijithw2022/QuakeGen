@@ -99,7 +99,7 @@ class STEADDataset(data.Dataset):
     
     def get_test_data(self):
         test_waveforms = [self.get_eq_waveform(trace) for trace in self.splits["eq_test"]]
-        noise_waveforms = [self.get_waveform(trace) for trace in self.splits["noise_test"]]
+        noise_waveforms = [self.get_noise_data(trace) for trace in self.splits["noise_test"]]
         return test_waveforms + noise_waveforms
     
     def __getitem__(self, idx):

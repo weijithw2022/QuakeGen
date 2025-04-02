@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pytest
-from network import Encoder 
+from ganomaly.network import Encoder 
 
 @pytest.fixture
 def sample_input():
@@ -14,12 +14,12 @@ def sample_input():
 @pytest.fixture
 def encoder():
     return Encoder(
-        input_size=3000,
+        input_size=200,
         input_channels=3,
         base_channels=8,
-        kernel_size=7,
-        stride=4,
-        padding=3,
+        kernel_size=3,
+        stride=2,
+        padding=1,
         alpha=0.2,
         latent_dim=3,
         shuffle_factor=2,
